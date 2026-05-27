@@ -1,0 +1,9 @@
+__pycache__/
+/.venv/
+.env
+.env.local
+.env.*
+.mcaoe-smoke.sqlite3
+tmp_env_test/
+*.pyc
+__pycache__/

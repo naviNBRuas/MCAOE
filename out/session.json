@@ -1,0 +1,94 @@
+{
+  "generated_at": "2026-05-26T17:58:54.006845+00:00",
+  "session": {
+    "id": "822dfebf-609b-4ca8-aa64-93c6bbe1d5b1",
+    "created_at": "2026-05-26T17:58:53.994848+00:00",
+    "name": "default",
+    "capability": "web_security",
+    "targets": [
+      "https://example.com"
+    ],
+    "hosts": [],
+    "services": [],
+    "technologies": [],
+    "findings": [],
+    "recommendations": [
+      {
+        "id": "76ce0658-b39e-4a42-99a8-1608e9ca6286",
+        "created_at": "2026-05-26T17:58:53.997598+00:00",
+        "title": "Use web security toolkit",
+        "rationale": "Recommended tooling for this mode includes: nmap, whatweb, nikto, ffuf, gobuster.",
+        "confidence": 0.75,
+        "priority": 3,
+        "evidence_ids": [],
+        "workflow_relevance": "discovery",
+        "requires_approval": true
+      },
+      {
+        "id": "ddc0d95f-66bc-4ed5-9c55-55c265f35d99",
+        "created_at": "2026-05-26T17:58:53.997812+00:00",
+        "title": "Run initial discovery",
+        "rationale": "No hosts have been discovered yet, so the attack surface is still unmeasured.",
+        "confidence": 0.9,
+        "priority": 2,
+        "evidence_ids": [],
+        "workflow_relevance": "discovery",
+        "requires_approval": true
+      },
+      {
+        "id": "58bc9765-4c2f-4797-9aa2-1df23c2eee6e",
+        "created_at": "2026-05-26T17:58:53.998080+00:00",
+        "title": "Capture fingerprints",
+        "rationale": "A target exists, but no structured technologies have been identified yet.",
+        "confidence": 0.88,
+        "priority": 2,
+        "evidence_ids": [],
+        "workflow_relevance": "fingerprinting",
+        "requires_approval": true
+      }
+    ],
+    "unknowns": [],
+    "evidence": [],
+    "commands": [],
+    "workflow": {
+      "id": "af206a49-0dd8-4adb-886e-54ad1fc85534",
+      "created_at": "2026-05-26T17:58:53.995070+00:00",
+      "target": "https://example.com",
+      "stage": "discovery",
+      "capability": "web_security",
+      "notes": []
+    }
+  },
+  "coverage": {
+    "coverage_score": 70,
+    "open_count": 3,
+    "items": [
+      {
+        "label": "No hosts discovered",
+        "details": "No host discovery results have been recorded.",
+        "priority": 2
+      },
+      {
+        "label": "Fingerprinting incomplete",
+        "details": "No technology fingerprints have been captured yet.",
+        "priority": 3
+      },
+      {
+        "label": "No evidence captured",
+        "details": "The session does not yet contain structured evidence artifacts.",
+        "priority": 3
+      }
+    ]
+  },
+  "summary": "Session: default\nCapability profile: web_security\nWorkflow stage: discovery\nTarget: https://example.com\nInventory: 0 hosts | 0 services | 0 technologies\nSignals: 0 findings | 0 unknowns | 0 evidence items | 0 commands\nCoverage score: 70/100 | Open gaps: No hosts discovered; Fingerprinting incomplete; No evidence captured\nTop recommendation: Run initial discovery (discovery, 90%)\nHighlights:\n  - Recommended next actions: Run initial discovery (discovery, 90%); Capture fingerprints (fingerprinting, 88%); Use web security toolkit (discovery, 75%)\n  - Open coverage gaps: No hosts discovered [2]; Fingerprinting incomplete [3]; No evidence captured [3]",
+  "highlights": [
+    "Recommended next actions: Run initial discovery (discovery, 90%); Capture fingerprints (fingerprinting, 88%); Use web security toolkit (discovery, 75%)",
+    "Open coverage gaps: No hosts discovered [2]; Fingerprinting incomplete [3]; No evidence captured [3]"
+  ],
+  "next_steps": [
+    "Run initial discovery: No hosts have been discovered yet, so the attack surface is still unmeasured. (confidence 90%, priority 2)",
+    "Capture fingerprints: A target exists, but no structured technologies have been identified yet. (confidence 88%, priority 2)",
+    "Use web security toolkit: Recommended tooling for this mode includes: nmap, whatweb, nikto, ffuf, gobuster. (confidence 75%, priority 3)"
+  ],
+  "timeline": []
+}
