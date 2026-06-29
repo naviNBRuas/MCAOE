@@ -11,10 +11,7 @@ from mcaoe.execution.provider import ExecutionProvider, ExecutionTask
 from mcaoe.graph.engine import KnowledgeGraphEngine
 from mcaoe.database.store import SQLiteStore
 from mcaoe.models.domain import CommandExecution, Evidence, Finding, Session, Technology, Unknown
-from mcaoe.parsers.ffuf import parse_ffuf_output
-from mcaoe.parsers.nmap_xml import parse_nmap_xml
-from mcaoe.parsers.nikto import parse_nikto_output
-from mcaoe.parsers.whatweb import as_domain_technologies, parse_whatweb_output
+
 from mcaoe.policy import SafetyPolicy
 from mcaoe.plugins.registry import PluginRegistry
 from mcaoe.recommendations.engine import RecommendationEngine
@@ -88,6 +85,13 @@ class AnalystOrchestrator:
         await self.bus.publish(Event(type=EventType.task_started, payload={"command": task.command, "arguments": task.arguments}))
         result = await self.provider.execute(task)
         completed_at = datetime.now(timezone.utc)
+        
+        stats = {}
+        if task.plugin_name and task.plugin_name in self.registry.plugins:
+            plugin = self.registry.plugins[task.plugin_name]
+            if hasattr(plugin, "ingest_output"):
+                stats = plugin.ingest_output(session, result.stdout or "", result.stderr or "", self)
+                
         backend = result.metadata.get("backend") or self.provider.__class__.__name__
         session.commands.append(
             CommandExecution(
@@ -109,7 +113,7 @@ class AnalystOrchestrator:
         )
         await self.bus.publish(Event(type=EventType.task_completed, payload={"command": task.command, "exit_code": result.exit_code}))
         self.store.save_session(session)
-        return {"exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr}
+        return {"exit_code": result.exit_code, "stdout": result.stdout, "stderr": result.stderr, "stats": stats}
 
     async def advance_workflow(
         self,
@@ -150,112 +154,7 @@ class AnalystOrchestrator:
         await self.bus.publish(Event(type=EventType.target_added, payload={"target": target}))
         self.store.save_session(session)
 
-    def ingest_nmap_xml(self, session: Session, xml_text: str) -> dict[str, int]:
-        parsed = parse_nmap_xml(xml_text)
-        session.hosts.extend(parsed.hosts)
-        session.services.extend(parsed.services)
-        session.evidence.extend(parsed.evidence)
-        session.technologies.extend(parsed.technologies)
 
-        for host in parsed.hosts:
-            self.graph.add_host(host)
-            self._emit_event(Event(type=EventType.target_added, payload={"address": host.address, "hostname": host.hostname}))
-        for service in parsed.services:
-            self.graph.add_service(service)
-            self._emit_event(Event(type=EventType.service_identified, payload={"name": service.name, "port": service.port, "protocol": service.protocol}))
-        for evidence in parsed.evidence:
-            self.graph.add_evidence(evidence)
-            self._emit_event(Event(type=EventType.evidence_added, payload={"source": evidence.source, "summary": evidence.summary}))
-        for technology in parsed.technologies:
-            self.graph.add_technology(technology)
-            self._emit_event(Event(type=EventType.technology_detected, payload={"name": technology.name, "confidence": technology.confidence}))
-
-        session.recommendations = self.recommendations.generate(session)
-        self.store.save_session(session)
-
-        return {
-            "hosts": len(parsed.hosts),
-            "services": len(parsed.services),
-            "evidence": len(parsed.evidence),
-            "technologies": len(parsed.technologies),
-        }
-
-    def ingest_whatweb_output(self, session: Session, output_text: str) -> dict[str, int]:
-        parsed = parse_whatweb_output(output_text)
-        technologies = as_domain_technologies(parsed)
-        session.technologies.extend(technologies)
-        session.evidence.extend(parsed.evidence)
-
-        for technology in technologies:
-            self.graph.add_technology(technology)
-            self._emit_event(Event(type=EventType.technology_detected, payload={"name": technology.name, "confidence": technology.confidence}))
-        for evidence in parsed.evidence:
-            self.graph.add_evidence(evidence)
-            self._emit_event(Event(type=EventType.evidence_added, payload={"source": evidence.source, "summary": evidence.summary}))
-
-        session.recommendations = self.recommendations.generate(session)
-        self.store.save_session(session)
-
-        return {
-            "technologies": len(technologies),
-            "evidence": len(parsed.evidence),
-        }
-
-    def ingest_nikto_output(self, session: Session, output_text: str) -> dict[str, int]:
-        parsed = parse_nikto_output(output_text)
-        session.findings.extend(parsed.findings)
-        session.evidence.extend(parsed.evidence)
-        session.technologies.extend(parsed.technologies)
-        session.unknowns.extend(parsed.unknowns)
-
-        for finding in parsed.findings:
-            self.graph.add_finding(finding)
-            self._emit_event(Event(type=EventType.recommendation_created, payload={"finding": finding.title, "severity": finding.severity}))
-        for technology in parsed.technologies:
-            self.graph.add_technology(technology)
-            self._emit_event(Event(type=EventType.technology_detected, payload={"name": technology.name, "confidence": technology.confidence}))
-        for evidence in parsed.evidence:
-            self.graph.add_evidence(evidence)
-            self._emit_event(Event(type=EventType.evidence_added, payload={"source": evidence.source, "summary": evidence.summary}))
-        for unknown in parsed.unknowns:
-            self.graph.add_unknown(unknown)
-            self._emit_event(Event(type=EventType.unknown_detected, payload={"label": unknown.label, "priority": unknown.priority}))
-
-        session.recommendations = self.recommendations.generate(session)
-        self.store.save_session(session)
-
-        return {
-            "findings": len(parsed.findings),
-            "evidence": len(parsed.evidence),
-            "technologies": len(parsed.technologies),
-            "unknowns": len(parsed.unknowns),
-        }
-
-    def ingest_ffuf_output(self, session: Session, output_text: str) -> dict[str, int]:
-        parsed = parse_ffuf_output(output_text)
-        session.findings.extend(parsed.findings)
-        session.evidence.extend(parsed.evidence)
-        session.unknowns.extend(parsed.unknowns)
-
-        for finding in parsed.findings:
-            self.graph.add_finding(finding)
-            self._emit_event(Event(type=EventType.recommendation_created, payload={"finding": finding.title, "severity": finding.severity}))
-        for evidence in parsed.evidence:
-            self.graph.add_evidence(evidence)
-            self._emit_event(Event(type=EventType.evidence_added, payload={"source": evidence.source, "summary": evidence.summary}))
-        for unknown in parsed.unknowns:
-            self.graph.add_unknown(unknown)
-            self._emit_event(Event(type=EventType.unknown_detected, payload={"label": unknown.label, "priority": unknown.priority}))
-
-        session.recommendations = self.recommendations.generate(session)
-        self.store.save_session(session)
-
-        return {
-            "results": len(parsed.results),
-            "findings": len(parsed.findings),
-            "evidence": len(parsed.evidence),
-            "unknowns": len(parsed.unknowns),
-        }
 
     def add_finding(self, session: Session, title: str, description: str, severity: str = "informational") -> None:
         finding = Finding(title=title, description=description, severity=severity)

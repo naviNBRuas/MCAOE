@@ -153,7 +153,8 @@ class MCAOEApp(App):
         self.query_one("#terminal", RichLog).write(f"Exit code: {result['exit_code']}")
         if result["stdout"]:
             self.query_one("#terminal", RichLog).write(result["stdout"])
-            self._ingest_execution_output(result["stdout"])
+        if result.get("stats"):
+            self.query_one("#terminal", RichLog).write(f"Parsed stats: {result['stats']}")
         if result["stderr"]:
             self.query_one("#terminal", RichLog).write(result["stderr"])
         self.planned_plugin = None
@@ -197,16 +198,7 @@ class MCAOEApp(App):
         terminal.write(f"- arguments: {' '.join(arguments)}")
         terminal.write("Press Enter to execute with explicit approval.")
 
-    def _ingest_execution_output(self, stdout: str) -> None:
-        if self.planned_plugin == "whatweb":
-            parsed = self.orchestrator.ingest_whatweb_output(self.session, stdout)
-            self.query_one("#terminal", RichLog).write(f"Parsed technologies: {parsed['technologies']}")
-        elif self.planned_plugin == "nikto":
-            parsed = self.orchestrator.ingest_nikto_output(self.session, stdout)
-            self.query_one("#terminal", RichLog).write(f"Parsed findings: {parsed['findings']}")
-        elif self.planned_plugin == "ffuf":
-            parsed = self.orchestrator.ingest_ffuf_output(self.session, stdout)
-            self.query_one("#terminal", RichLog).write(f"Parsed results: {parsed['results']}")
+
 
     def render_dashboard(self) -> None:
         self._set_banner()

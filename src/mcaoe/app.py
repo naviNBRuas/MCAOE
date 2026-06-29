@@ -153,15 +153,8 @@ def main() -> None:
                 print(f"exit_code={result['exit_code']}")
                 if result["stdout"]:
                     print(result["stdout"])
-                    if args.plugin == "whatweb":
-                        parsed = orchestrator.ingest_whatweb_output(session, result["stdout"])
-                        print(f"parsed_technologies={parsed['technologies']}")
-                    elif args.plugin == "nikto":
-                        parsed = orchestrator.ingest_nikto_output(session, result["stdout"])
-                        print(f"parsed_findings={parsed['findings']}")
-                    elif args.plugin == "ffuf":
-                        parsed = orchestrator.ingest_ffuf_output(session, result["stdout"])
-                        print(f"parsed_results={parsed['results']}")
+                if result.get("stats"):
+                    print(f"parsed_stats={result['stats']}")
                 if result["stderr"]:
                     print(result["stderr"])
         print(f"workflow_stage={session.workflow.stage.value}")
