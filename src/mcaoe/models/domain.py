@@ -131,6 +131,33 @@ class Session(BaseEntity):
     commands: list[CommandExecution] = Field(default_factory=list)
     workflow: WorkflowState = Field(default_factory=WorkflowState)
 
+    def add_target(self, target: str) -> None:
+        if target not in self.targets:
+            self.targets.append(target)
+
+    def add_host(self, host: Host) -> None:
+        if not any(existing.address == host.address for existing in self.hosts):
+            self.hosts.append(host)
+
+    def add_service(self, service: Service) -> None:
+        if not any(
+            existing.port == service.port and existing.protocol == service.protocol and existing.host_id == service.host_id
+            for existing in self.services
+        ):
+            self.services.append(service)
+
+    def add_technology(self, technology: Technology) -> None:
+        if not any(existing.name == technology.name for existing in self.technologies):
+            self.technologies.append(technology)
+
+    def add_finding(self, finding: Finding) -> None:
+        if not any(existing.title == finding.title for existing in self.findings):
+            self.findings.append(finding)
+
+    def add_unknown(self, unknown: Unknown) -> None:
+        if not any(existing.label == unknown.label for existing in self.unknowns):
+            self.unknowns.append(unknown)
+
 
 class CapabilityProfile(BaseEntity):
     name: CapabilityName

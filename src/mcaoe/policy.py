@@ -8,7 +8,7 @@ from mcaoe.execution.provider import ExecutionTask
 
 DANGEROUS_PATTERNS = (
     "--script",
-    "-A",
+    "-a",
     "--traceroute",
     "--data",
     "--post-data",

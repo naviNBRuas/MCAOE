@@ -1,0 +1,24 @@
+FROM kalilinux/kali-rolling:latest AS mcaoe-tools
+
+LABEL org.opencontainers.image.title="MCAOE Tooling Image"
+LABEL org.opencontainers.image.description="Common cybersecurity tools for MCAOE execution provider"
+LABEL org.opencontainers.image.vendor="NBR. Company"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nmap \
+    whatweb \
+    nikto \
+    ffuf \
+    gobuster \
+    sslscan \
+    subfinder \
+    amass \
+    curl \
+    wget \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN adduser --disabled-password --gecos "" mcaoe
+USER mcaoe
+
+ENTRYPOINT ["/bin/sh", "-c"]

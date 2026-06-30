@@ -40,10 +40,13 @@ class NmapPlugin:
         if not stdout:
             return {}
         parsed = parse_nmap_xml(stdout)
-        session.hosts.extend(parsed.hosts)
-        session.services.extend(parsed.services)
+        for host in parsed.hosts:
+            session.add_host(host)
+        for service in parsed.services:
+            session.add_service(service)
         session.evidence.extend(parsed.evidence)
-        session.technologies.extend(parsed.technologies)
+        for technology in parsed.technologies:
+            session.add_technology(technology)
 
         for host in parsed.hosts:
             orchestrator.graph.add_host(host)

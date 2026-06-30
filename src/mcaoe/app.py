@@ -44,6 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runtime", choices=["local", "docker"], default="local", help="Execution backend to use")
     parser.add_argument("--export-report", help="Write a session report to the given file path and exit")
     parser.add_argument("--report-format", choices=["markdown", "json"], default="markdown", help="Session report output format")
+    parser.add_argument("--list-sessions", action="store_true", help="List all saved sessions and exit")
+    parser.add_argument("--delete-session", help="Delete a session by its ID")
+    parser.add_argument("--load-session", help="Load an existing session by its ID instead of creating a new one")
+    parser.add_argument("--session-count", action="store_true", help="Print the number of saved sessions and exit")
     return parser
 
 
@@ -61,12 +65,40 @@ def main() -> None:
         capability=args.capability,
     )
 
+    store = SQLiteStore(settings.database_path)
+
+    if args.list_sessions:
+        sessions = store.list_sessions()
+        if not sessions:
+            print("No saved sessions found.")
+        else:
+            for sid, name in sessions:
+                print(f"{sid}  {name}")
+        return
+
+    if args.session_count:
+        print(f"sessions={store.session_count()}")
+        return
+
+    if args.delete_session:
+        if store.delete_session(args.delete_session):
+            print(f"deleted={args.delete_session}")
+        else:
+            print(f"not_found={args.delete_session}")
+        return
+
     capability = CapabilityName(settings.capability)
-    session = Session(name=settings.session_name, capability=capability)
+    if args.load_session:
+        loaded = store.load_session(args.load_session)
+        if loaded is None:
+            raise SystemExit(f"Session {args.load_session!r} not found in database.")
+        session = loaded
+    else:
+        session = Session(name=settings.session_name, capability=capability)
+
     if args.target:
+        session.add_target(args.target)
         session.workflow.target = args.target
-        if args.target not in session.targets:
-            session.targets.append(args.target)
     bus = EventBus()
     journal = EventJournal()
     bus.subscribe_all(journal.append)
@@ -75,7 +107,6 @@ def main() -> None:
     recommendations = recommendation_engine.generate(session)
     session.recommendations = recommendations
     graph = KnowledgeGraphEngine()
-    store = SQLiteStore(settings.database_path)
     assistant = AnalystAssistant()
     registry = PluginRegistry.with_defaults()
     policy = SafetyPolicy()

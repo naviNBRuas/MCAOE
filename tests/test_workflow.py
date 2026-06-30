@@ -148,7 +148,8 @@ def test_ingest_nmap_xml_persists_technologies_and_evidence(tmp_path: Path) -> N
         store=SQLiteStore(tmp_path / "mcaoe.sqlite3"),
     )
 
-    counts = orchestrator.ingest_nmap_xml(session, SAMPLE_NMAP_XML)
+    plugin = orchestrator.registry.get("nmap")
+    counts = plugin.ingest_output(session, SAMPLE_NMAP_XML, "", orchestrator)  # type: ignore[attr-defined]
 
     assert counts["hosts"] == 1
     assert counts["services"] == 1
@@ -211,7 +212,8 @@ def test_ingest_whatweb_output_persists_technologies_and_recommendations(tmp_pat
         store=SQLiteStore(tmp_path / "mcaoe.sqlite3"),
     )
 
-    counts = orchestrator.ingest_whatweb_output(session, SAMPLE_WHATWEB_JSON)
+    plugin = orchestrator.registry.get("whatweb")
+    counts = plugin.ingest_output(session, SAMPLE_WHATWEB_JSON, "", orchestrator)  # type: ignore[attr-defined]
 
     assert counts["technologies"] == 2
     assert session.technologies
@@ -230,7 +232,8 @@ def test_ingest_nikto_output_persists_findings_and_recommendations(tmp_path: Pat
         store=SQLiteStore(tmp_path / "mcaoe.sqlite3"),
     )
 
-    counts = orchestrator.ingest_nikto_output(session, SAMPLE_NIKTO_OUTPUT)
+    plugin = orchestrator.registry.get("nikto")
+    counts = plugin.ingest_output(session, SAMPLE_NIKTO_OUTPUT, "", orchestrator)  # type: ignore[attr-defined]
 
     assert counts["findings"] >= 2
     assert session.findings
@@ -250,7 +253,8 @@ def test_ingest_ffuf_output_persists_findings_and_recommendations(tmp_path: Path
         store=SQLiteStore(tmp_path / "mcaoe.sqlite3"),
     )
 
-    counts = orchestrator.ingest_ffuf_output(session, SAMPLE_FFUF_JSON)
+    plugin = orchestrator.registry.get("ffuf")
+    counts = plugin.ingest_output(session, SAMPLE_FFUF_JSON, "", orchestrator)  # type: ignore[attr-defined]
 
     assert counts["results"] == 2
     assert session.findings
@@ -278,7 +282,7 @@ def test_execute_planned_task_records_execution_audit_metadata(tmp_path: Path) -
         graph=KnowledgeGraphEngine(),
         recommendations=RecommendationEngine(),
         store=SQLiteStore(tmp_path / "mcaoe.sqlite3"),
-        provider=FakeProvider(),  # type: ignore[arg-type]
+        provider=FakeProvider(),
     )
 
     result = asyncio.run(

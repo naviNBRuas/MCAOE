@@ -5,10 +5,10 @@ from pathlib import Path
 from typing import Iterable
 
 try:
-    import keyring  # type: ignore
+    import keyring as _keyring_lib
     _KEYRING_AVAILABLE = True
 except Exception:
-    keyring = None  # type: ignore
+    _keyring_lib = None
     _KEYRING_AVAILABLE = False
 
 
@@ -46,11 +46,10 @@ def get_api_key(provider: str) -> str | None:
 
     if _KEYRING_AVAILABLE:
         try:
-            secret = keyring.get_password("mcaoe", provider)
+            secret: str | None = _keyring_lib.get_password("mcaoe", provider)
             if secret:
                 return secret
         except Exception:
-            # Do not raise on keyring errors; fall through to None
             pass
 
     return None
@@ -61,7 +60,7 @@ def store_api_key_in_keyring(provider: str, key: str) -> bool:
     if not _KEYRING_AVAILABLE:
         return False
     try:
-        keyring.set_password("mcaoe", provider.lower(), key)
+        _keyring_lib.set_password("mcaoe", provider.lower(), key)
         return True
     except Exception:
         return False

@@ -3,7 +3,7 @@ from __future__ import annotations
 __all__ = ["MCAOEApp"]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> type:
 	if name != "MCAOEApp":
 		raise AttributeError(name)
 

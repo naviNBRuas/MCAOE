@@ -50,3 +50,16 @@ class SQLiteStore:
         with sqlite3.connect(self.path) as connection:
             rows = connection.execute("SELECT id, name FROM sessions ORDER BY name ASC").fetchall()
         return [(str(row[0]), str(row[1])) for row in rows]
+
+    def delete_session(self, session_id: str) -> bool:
+        self.initialize()
+        with sqlite3.connect(self.path) as connection:
+            cursor = connection.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            connection.commit()
+            return cursor.rowcount > 0
+
+    def session_count(self) -> int:
+        self.initialize()
+        with sqlite3.connect(self.path) as connection:
+            row = connection.execute("SELECT COUNT(*) FROM sessions").fetchone()
+            return int(row[0]) if row else 0

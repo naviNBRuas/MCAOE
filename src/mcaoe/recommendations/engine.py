@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mcaoe.analysis.gaps import analyze_session_gaps
-from mcaoe.models.domain import Finding, Recommendation, Service, Session, Technology, Unknown
+from mcaoe.models.domain import Finding, Recommendation, Service, Session, Technology
 from mcaoe.workflows import build_mvp_capability_profiles
 
 

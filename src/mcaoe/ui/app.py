@@ -14,7 +14,7 @@ from mcaoe.runtime.docker import DockerRuntimeManager
 from mcaoe.ui.readiness import render_readiness_scorecard
 
 
-class MCAOEApp(App):
+class MCAOEApp(App[None]):
     CSS = """
     Screen {
         layout: vertical;
@@ -208,12 +208,13 @@ class MCAOEApp(App):
         self._set_execution()
 
     def _set_banner(self) -> None:
-        summary = self.assistant.session_card(self.session)
-        counts = summary["counts"]
+        summary: dict[str, object] = self.assistant.session_card(self.session)
+        counts_raw = summary.get("counts", {})
+        counts: dict[str, object] = counts_raw if isinstance(counts_raw, dict) else {}
         banner = self.query_one("#banner", Static)
         banner.update(
-            f"[b]MCAOE[/b]  |  session={summary['session']}  |  capability={summary['capability']}  |  stage={summary['workflow_stage']}  |  "
-            f"target={summary['target'] or 'unset'}  |  coverage={summary['coverage_score']}/100  |  targets={counts['targets']} hosts={counts['hosts']} services={counts['services']} tech={counts['technologies']} findings={counts['findings']} unknowns={counts['unknowns']}"
+            f"[b]MCAOE[/b]  |  session={summary.get('session', '')}  |  capability={summary.get('capability', '')}  |  stage={summary.get('workflow_stage', '')}  |  "
+            f"target={summary.get('target') or 'unset'}  |  coverage={summary.get('coverage_score', '?')}/100  |  targets={counts.get('targets', 0)} hosts={counts.get('hosts', 0)} services={counts.get('services', 0)} tech={counts.get('technologies', 0)} findings={counts.get('findings', 0)} unknowns={counts.get('unknowns', 0)}"
         )
 
     def _set_activity(self) -> None:

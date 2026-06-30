@@ -17,7 +17,8 @@ from mcaoe.parsers.ffuf import parse_ffuf_output
 def ingest_whatweb_output(session: Session, stdout: str, stderr: str, orchestrator: "AnalystOrchestrator") -> dict[str, int]:
     parsed = parse_whatweb_output(stdout)
     technologies = as_domain_technologies(parsed)
-    session.technologies.extend(technologies)
+    for technology in technologies:
+        session.add_technology(technology)
     session.evidence.extend(parsed.evidence)
 
     for technology in technologies:
@@ -38,10 +39,13 @@ def ingest_whatweb_output(session: Session, stdout: str, stderr: str, orchestrat
 
 def ingest_nikto_output(session: Session, stdout: str, stderr: str, orchestrator: "AnalystOrchestrator") -> dict[str, int]:
     parsed = parse_nikto_output(stdout)
-    session.findings.extend(parsed.findings)
+    for finding in parsed.findings:
+        session.add_finding(finding)
     session.evidence.extend(parsed.evidence)
-    session.technologies.extend(parsed.technologies)
-    session.unknowns.extend(parsed.unknowns)
+    for technology in parsed.technologies:
+        session.add_technology(technology)
+    for unknown in parsed.unknowns:
+        session.add_unknown(unknown)
 
     for finding in parsed.findings:
         orchestrator.graph.add_finding(finding)
@@ -69,9 +73,11 @@ def ingest_nikto_output(session: Session, stdout: str, stderr: str, orchestrator
 
 def ingest_ffuf_output(session: Session, stdout: str, stderr: str, orchestrator: "AnalystOrchestrator") -> dict[str, int]:
     parsed = parse_ffuf_output(stdout)
-    session.findings.extend(parsed.findings)
+    for finding in parsed.findings:
+        session.add_finding(finding)
     session.evidence.extend(parsed.evidence)
-    session.unknowns.extend(parsed.unknowns)
+    for unknown in parsed.unknowns:
+        session.add_unknown(unknown)
 
     for finding in parsed.findings:
         orchestrator.graph.add_finding(finding)

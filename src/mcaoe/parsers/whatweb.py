@@ -59,9 +59,9 @@ def _parse_json_payload(payload: Any) -> WhatWebParseResult:
         target = str(item.get("target") or item.get("url") or item.get("host") or "unknown")
         plugins = item.get("plugins") or item.get("technologies") or item.get("matches") or {}
         if isinstance(plugins, dict):
-            plugin_items = plugins.items()
+            plugin_items = list(plugins.items())
         elif isinstance(plugins, list):
-            plugin_items = ((str(entry), {}) for entry in plugins)
+            plugin_items = [(str(entry), {}) for entry in plugins]
         else:
             plugin_items = []
 

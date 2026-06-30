@@ -4,6 +4,12 @@ __pycache__/
 .env.local
 .env.*
 .mcaoe-smoke.sqlite3
+.mcaoe/*.sqlite3
+.mcaoe/*.sqlite3-wal
+.mcaoe/*.sqlite3-shm
 tmp_env_test/
 *.pyc
 __pycache__/
+.pytest_cache/
+.ruff_cache/
+out/

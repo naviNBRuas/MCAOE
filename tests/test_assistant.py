@@ -20,12 +20,13 @@ def test_assistant_session_card_and_highlights() -> None:
     )
 
     assistant = AnalystAssistant()
-    card = assistant.session_card(session)
+    card: dict[str, object] = assistant.session_card(session)
 
-    assert card["session"] == "summary-test"
-    assert card["target"] == "https://example.com"
-    assert card["counts"]["targets"] == 1
-    assert card["coverage_score"] < 100
+    assert str(card["session"]) == "summary-test"
+    assert str(card["target"]) == "https://example.com"
+    assert isinstance(card["counts"], dict)
+    assert card["counts"].get("targets") == 1
+    assert isinstance(card["coverage_score"], int) and card["coverage_score"] < 100
     assert card["counts"]["technologies"] == 1
     assert card["top_recommendations"]
     assert any("Key findings" in highlight for highlight in assistant.highlights(session))

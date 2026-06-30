@@ -7,18 +7,18 @@ from typing import Any, Callable, Union, get_args, get_origin, get_type_hints
 from uuid import UUID
 
 try:  # pragma: no cover - preferred path when dependency is installed
-    from pydantic import BaseModel as BaseModel  # type: ignore
-    from pydantic import Field as Field  # type: ignore
+    from pydantic import BaseModel as BaseModel
+    from pydantic import Field as Field
 except Exception:  # pragma: no cover - fallback used in minimal environments
     @dataclass(slots=True)
     class _FieldSpec:
         default: Any = ...
         default_factory: Callable[[], Any] | None = None
 
-    def Field(*, default: Any = ..., default_factory: Callable[[], Any] | None = None, **_: Any) -> Any:
+    def Field(*, default: Any = ..., default_factory: Callable[[], Any] | None = None, **_: Any) -> Any:  # type: ignore[no-redef]
         return _FieldSpec(default=default, default_factory=default_factory)
 
-    class BaseModel:
+    class BaseModel:  # type: ignore[no-redef]
         def __init__(self, **data: Any) -> None:
             cls = self.__class__
             hints = get_type_hints(cls)
@@ -39,10 +39,10 @@ except Exception:  # pragma: no cover - fallback used in minimal environments
         @classmethod
         def model_validate(cls, data: Any) -> "BaseModel":
             if isinstance(data, cls):
-                return data
+                return data  # type: ignore[return-value]
             if not isinstance(data, dict):
                 raise TypeError(f"Expected mapping for {cls.__name__}, got {type(data)!r}")
-            return cls(**data)
+            return cls(**data)  # type: ignore[return-value]
 
         def __repr__(self) -> str:
             values = ", ".join(f"{name}={getattr(self, name)!r}" for name in _model_fields(self.__class__))
@@ -103,9 +103,9 @@ except Exception:  # pragma: no cover - fallback used in minimal environments
 
         return value
 
-    def _dump_value(value: Any, mode: str | None = None) -> Any:
+    def _dump_value(value: Any, mode: object = None) -> Any:
         if isinstance(value, BaseModel):
-            return value.model_dump(mode=mode)
+            return value.model_dump(mode=mode)  # type: ignore[arg-type]
         if isinstance(value, list):
             return [_dump_value(item, mode=mode) for item in value]
         if isinstance(value, dict):
