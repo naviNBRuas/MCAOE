@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import shutil
 from asyncio.subprocess import PIPE
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from mcaoe.execution.provider import ExecutionResult, ExecutionTask
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -63,6 +67,7 @@ class DockerRuntimeManager:
     image: str = "blackarchlinux/blackarch"
     container_name_prefix: str = "mcaoe"
     docker_executable: str = "docker"
+    container_cleanup: bool = True
 
     async def ensure_runtime(self) -> dict[str, Any]:
         return self.status().as_dict()
@@ -95,7 +100,7 @@ class DockerRuntimeManager:
             return SECURITY_PROFILES["defensive_strict"]
         return SECURITY_PROFILES["recon_standard"]
 
-    def _build_command(self, task: ExecutionTask) -> list[str]:
+    def _build_command(self, task: ExecutionTask) -> tuple[list[str], str]:
         workdir = Path.cwd()
         container_name = f"{self.container_name_prefix}-{uuid4().hex[:8]}"
         security = self._select_security_profile(task)
@@ -110,11 +115,11 @@ class DockerRuntimeManager:
             str(security.pids_limit),
         ]
         if security.no_new_privileges:
-            security_flags.extend(["--security-opt", "no-new-privileges"]) 
+            security_flags.extend(["--security-opt", "no-new-privileges"])
         if security.read_only_rootfs:
             security_flags.append("--read-only")
 
-        return [
+        command: list[str] = [
             self.docker_executable,
             "run",
             "--rm",
@@ -129,6 +134,123 @@ class DockerRuntimeManager:
             task.command,
             *task.arguments,
         ]
+        return command, container_name
+
+    async def stop_container(self, container_name: str, timeout: int = 10) -> None:
+        docker_path = shutil.which(self.docker_executable)
+        if docker_path is None:
+            return
+        try:
+            stop_proc = await asyncio.create_subprocess_exec(
+                docker_path, "stop", "--time", str(timeout), container_name,
+                stdout=PIPE, stderr=PIPE,
+            )
+            await stop_proc.communicate()
+        except Exception:
+            logger.exception("Failed to stop container %s", container_name)
+        if self.container_cleanup:
+            try:
+                rm_proc = await asyncio.create_subprocess_exec(
+                    docker_path, "rm", "--force", container_name,
+                    stdout=PIPE, stderr=PIPE,
+                )
+                await rm_proc.communicate()
+            except Exception:
+                logger.exception("Failed to remove container %s", container_name)
+
+    async def stream_logs(
+        self,
+        task: ExecutionTask,
+        on_line: Callable[[str], None] | None = None,
+    ) -> ExecutionResult:
+        task_id = uuid4()
+        docker_path = shutil.which(self.docker_executable)
+        security = self._select_security_profile(task)
+        if docker_path is None:
+            return ExecutionResult(
+                task_id=task_id,
+                exit_code=127,
+                stderr=f"Docker executable {self.docker_executable!r} was not found on PATH.",
+                metadata={"backend": "docker", "image": self.image, "security_profile": security.name},
+            )
+
+        command, container_name = self._build_command(task)
+        command[0] = docker_path
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=PIPE,
+                stderr=PIPE,
+            )
+        except FileNotFoundError as exc:
+            return ExecutionResult(
+                task_id=task_id,
+                exit_code=127,
+                stderr=str(exc),
+                metadata={
+                    "backend": "docker",
+                    "image": self.image,
+                    "command": task.command,
+                    "security_profile": security.name,
+                },
+            )
+
+        stdout_lines: list[str] = []
+        stderr_lines: list[str] = []
+
+        async def _read_stream(
+            stream: asyncio.StreamReader | None,
+            lines: list[str],
+        ) -> None:
+            if stream is None:
+                return
+            while True:
+                raw = await stream.readline()
+                if not raw:
+                    break
+                decoded = raw.decode(errors="replace").rstrip("\n")
+                lines.append(decoded)
+                if on_line is not None:
+                    on_line(decoded)
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(
+                    _read_stream(process.stdout, stdout_lines),
+                    _read_stream(process.stderr, stderr_lines),
+                ),
+                timeout=task.timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            await self.stop_container(container_name)
+            return ExecutionResult(
+                task_id=task_id,
+                exit_code=124,
+                stderr=f"Task timed out after {task.timeout_seconds} seconds",
+                metadata={
+                    "backend": "docker",
+                    "image": self.image,
+                    "timeout": task.timeout_seconds,
+                    "security_profile": security.name,
+                },
+            )
+
+        await process.wait()
+        return ExecutionResult(
+            task_id=task_id,
+            exit_code=process.returncode or 0,
+            stdout="\n".join(stdout_lines),
+            stderr="\n".join(stderr_lines),
+            metadata={
+                "backend": "docker",
+                "image": self.image,
+                "command": task.command,
+                "arguments": task.arguments,
+                "security_profile": security.name,
+                "container": container_name,
+            },
+        )
 
     async def run(self, task: ExecutionTask) -> ExecutionResult:
         task_id = uuid4()
@@ -142,7 +264,7 @@ class DockerRuntimeManager:
                 metadata={"backend": "docker", "image": self.image, "security_profile": security.name},
             )
 
-        command = self._build_command(task)
+        command, container_name = self._build_command(task)
         command[0] = docker_path
 
         try:
@@ -167,8 +289,7 @@ class DockerRuntimeManager:
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=task.timeout_seconds)
         except asyncio.TimeoutError:
-            process.kill()
-            await process.communicate()
+            await self.stop_container(container_name)
             return ExecutionResult(
                 task_id=task_id,
                 exit_code=124,
@@ -193,6 +314,7 @@ class DockerRuntimeManager:
                 "arguments": task.arguments,
                 "docker_command": command,
                 "security_profile": security.name,
+                "container": container_name,
                 "security": {
                     "network_mode": security.network_mode,
                     "read_only_rootfs": security.read_only_rootfs,
