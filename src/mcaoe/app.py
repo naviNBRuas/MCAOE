@@ -23,8 +23,87 @@ from mcaoe.workflows import build_mvp_capability_profiles
 from mcaoe.runtime.docker import DockerExecutionProvider, DockerRuntimeManager
 
 
+def _print_completion(shell: str) -> None:
+    if shell == "bash":
+        print(
+            """_mcaoe_completion() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    opts="--session-name --database --log-level --capability --target --plugin --execute --approve --list-profiles --list-plugins --no-ui --dry-run --runtime --export-report --export-session --import-session --report-format --list-sessions --delete-session --load-session --session-count --config --completion --help"
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+}
+complete -F _mcaoe_completion mcaoe"""
+        )
+    elif shell == "zsh":
+        print(
+            """#compdef mcaoe
+_mcaoe() {
+    local -a opts
+    opts=(
+        '--session-name:Session label'
+        '--database:Database path'
+        '--log-level:Log level'
+        '--capability:Capability profile'
+        '--target:Target host'
+        '--plugin:Plugin name'
+        '--execute:Execute task'
+        '--approve:Approve execution'
+        '--list-profiles:List profiles'
+        '--list-plugins:List plugins'
+        '--no-ui:Headless mode'
+        '--dry-run:Print summary'
+        '--runtime:Execution backend'
+        '--export-report:Export report path'
+        '--export-session:Export session ID'
+        '--import-session:Import session file'
+        '--report-format:Report format'
+        '--list-sessions:List sessions'
+        '--delete-session:Delete session'
+        '--load-session:Load session'
+        '--session-count:Session count'
+        '--config:Config file path'
+        '--completion:Shell type'
+    )
+    _arguments $opts
+}
+_mcaoe"""
+        )
+    elif shell == "fish":
+        print(
+            """complete -c mcaoe -l session-name -d 'Session label'
+complete -c mcaoe -l database -d 'Database path'
+complete -c mcaoe -l log-level -d 'Log level'
+complete -c mcaoe -l capability -d 'Capability profile'
+complete -c mcaoe -l target -d 'Target host'
+complete -c mcaoe -l plugin -d 'Plugin name'
+complete -c mcaoe -l execute -d 'Execute task'
+complete -c mcaoe -l approve -d 'Approve execution'
+complete -c mcaoe -l list-profiles -d 'List profiles'
+complete -c mcaoe -l list-plugins -d 'List plugins'
+complete -c mcaoe -l no-ui -d 'Headless mode'
+complete -c mcaoe -l dry-run -d 'Print summary'
+complete -c mcaoe -l runtime -d 'Execution backend'
+complete -c mcaoe -l export-report -d 'Export report path'
+complete -c mcaoe -l export-session -d 'Export session'
+complete -c mcaoe -l import-session -d 'Import session'
+complete -c mcaoe -l report-format -d 'Report format'
+complete -c mcaoe -l list-sessions -d 'List sessions'
+complete -c mcaoe -l delete-session -d 'Delete session'
+complete -c mcaoe -l load-session -d 'Load session'
+complete -c mcaoe -l session-count -d 'Session count'
+complete -c mcaoe -l config -d 'Config file'
+complete -c mcaoe -l completion -d 'Shell type'"""
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mcaoe", description="MCAOE analyst workbench")
+    parser = argparse.ArgumentParser(
+        prog="mcaoe",
+        description="MCAOE analyst workbench",
+        epilog="Shell completion: eval \"$(mcaoe --completion bash)\"",
+    )
     parser.add_argument("--session-name", default="default", help="Session label to use in the local store")
     parser.add_argument("--database", default=".mcaoe/mcaoe.sqlite3", help="SQLite database path")
     parser.add_argument("--log-level", default="INFO", help="Structured log level")
@@ -43,11 +122,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="Print the scaffold summary and exit")
     parser.add_argument("--runtime", choices=["local", "docker"], default="local", help="Execution backend to use")
     parser.add_argument("--export-report", help="Write a session report to the given file path and exit")
+    parser.add_argument("--export-session", help="Export a session to a JSON file by session ID and exit")
+    parser.add_argument("--import-session", help="Import a session from a JSON file and exit")
     parser.add_argument("--report-format", choices=["markdown", "json"], default="markdown", help="Session report output format")
     parser.add_argument("--list-sessions", action="store_true", help="List all saved sessions and exit")
     parser.add_argument("--delete-session", help="Delete a session by its ID")
     parser.add_argument("--load-session", help="Load an existing session by its ID instead of creating a new one")
     parser.add_argument("--session-count", action="store_true", help="Print the number of saved sessions and exit")
+    parser.add_argument("--config", help="Path to YAML config file (.mcaoe/config.yml by default)")
+    parser.add_argument(
+        "--completion",
+        choices=["bash", "zsh", "fish"],
+        help="Print shell completion script and exit",
+    )
     return parser
 
 
@@ -55,15 +142,21 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
+    if args.completion:
+        _print_completion(args.completion)
+        return
+
     configure_logging(args.log_level)
 
-    settings = AppSettings(
-        session_name=args.session_name,
-        database_path=Path(args.database),
-        log_level=args.log_level,
-        ui_enabled=not args.no_ui,
-        capability=args.capability,
-    )
+    config_path = Path(args.config) if args.config else Path(".mcaoe/config.yml")
+    settings = AppSettings.from_yaml(config_path)
+    settings.session_name = args.session_name
+    settings.database_path = Path(args.database)
+    settings.log_level = args.log_level
+    settings.ui_enabled = not args.no_ui
+    settings.capability = args.capability
+    settings.merge_env()
+    settings.to_yaml(config_path)
 
     store = SQLiteStore(settings.database_path)
 
@@ -72,8 +165,9 @@ def main() -> None:
         if not sessions:
             print("No saved sessions found.")
         else:
-            for sid, name in sessions:
-                print(f"{sid}  {name}")
+            for sid, name, cap, target in sessions:
+                target_str = target or "no target"
+                print(f"{sid}  {name}  [{cap}]  {target_str}")
         return
 
     if args.session_count:
@@ -85,6 +179,28 @@ def main() -> None:
             print(f"deleted={args.delete_session}")
         else:
             print(f"not_found={args.delete_session}")
+        return
+
+    if args.export_session:
+        payload = store.export_session_json(args.export_session)
+        if payload is None:
+            print(f"not_found={args.export_session}")
+        else:
+            out = Path(f"session_{args.export_session}.json")
+            out.write_text(payload, encoding="utf-8")
+            print(f"exported={out}")
+        return
+
+    if args.import_session:
+        src = Path(args.import_session)
+        if not src.exists():
+            print(f"not_found={src}")
+        else:
+            session = store.import_session_json(src.read_text(encoding="utf-8"))
+            if session is not None:
+                print(f"imported={session.id}  {session.name}")
+            else:
+                print("import_failed")
         return
 
     capability = CapabilityName(settings.capability)
