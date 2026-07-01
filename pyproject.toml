@@ -31,6 +31,22 @@ ai = [
     "google-generativeai>=0.8.0",
     "openai>=1.0.0",
 ]
+yaml = [
+    "pyyaml>=6.0",
+]
+alembic = [
+    "alembic>=1.12.0",
+]
+
+[project.entry-points."mcaoe.plugins"]
+nmap = "mcaoe.plugins.nmap:NmapPlugin"
+whatweb = "mcaoe.plugins.http_tools:build_whatweb_plugin"
+nikto = "mcaoe.plugins.http_tools:build_nikto_plugin"
+ffuf = "mcaoe.plugins.http_tools:build_ffuf_plugin"
+gobuster = "mcaoe.plugins.http_tools:build_gobuster_plugin"
+sslscan = "mcaoe.plugins.network_tools:build_sslscan_plugin"
+subfinder = "mcaoe.plugins.network_tools:build_subfinder_plugin"
+amass = "mcaoe.plugins.network_tools:build_amass_plugin"
 
 [project.scripts]
 mcaoe = "mcaoe.app:main"

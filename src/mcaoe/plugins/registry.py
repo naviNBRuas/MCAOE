@@ -20,8 +20,25 @@ class PluginRegistry:
     def get(self, name: str) -> object:
         return self.plugins[name]
 
+    def discover_entry_points(self) -> int:
+        count = 0
+        try:
+            import importlib.metadata as _md
+            for ep in _md.entry_points(group="mcaoe.plugins"):
+                try:
+                    plugin = ep.load()
+                    if callable(plugin) and not isinstance(plugin, type):
+                        plugin = plugin()
+                    self.register(plugin)
+                    count += 1
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return count
+
     @classmethod
-    def with_defaults(cls) -> "PluginRegistry":
+    def with_defaults(cls) -> PluginRegistry:
         registry = cls()
         registry.register(NmapPlugin())
         registry.register(build_whatweb_plugin())
@@ -31,4 +48,5 @@ class PluginRegistry:
         registry.register(build_sslscan_plugin())
         registry.register(build_subfinder_plugin())
         registry.register(build_amass_plugin())
+        registry.discover_entry_points()
         return registry

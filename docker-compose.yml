@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  mcaoe:
+    build:
+      context: .
+      dockerfile: containers/Dockerfile.tools
+    image: mcaoe-tools:latest
+    container_name: mcaoe-tools
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    networks:
+      - mcaoe-net
+    stdin_open: true
+    tty: true
+
+networks:
+  mcaoe-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
