@@ -27,6 +27,10 @@ dev = [
     "mypy>=1.5.0",
     "pre-commit>=3.4.0",
 ]
+ai = [
+    "google-generativeai>=0.8.0",
+    "openai>=1.0.0",
+]
 
 [project.scripts]
 mcaoe = "mcaoe.app:main"

@@ -1,22 +1,65 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from mcaoe.ai.provider import LLMProvider, create_provider
 from mcaoe.analysis.gaps import analyze_session_gaps
 from mcaoe.models.domain import Finding, Recommendation, Session, Technology, Unknown
 
 
 @dataclass(slots=True)
 class AnalystAssistant:
-    """Advisory-only AI helper.
+    llm_provider: LLMProvider | None = None
+    llm_enabled: bool = False
+    _provider_name: str = field(default="gemini")
 
-    This layer is intentionally optional and should summarize structured state
-    rather than orchestrate actions on its own.
-    """
+    def __post_init__(self) -> None:
+        if self.llm_provider is None and self.llm_enabled:
+            try:
+                self.llm_provider = create_provider(self._provider_name)
+            except Exception:
+                self.llm_enabled = False
+
+    def enable_llm(self, provider_name: str = "gemini") -> None:
+        self._provider_name = provider_name
+        try:
+            self.llm_provider = create_provider(provider_name)
+            self.llm_enabled = True
+        except Exception:
+            self.llm_enabled = False
+
+    def _llm_summarize(self, session: Session) -> str | None:
+        if not self.llm_enabled or self.llm_provider is None:
+            return None
+        gaps = analyze_session_gaps(session)
+        prompt = (
+            f"Summarize this cybersecurity reconnaissance session in 3-4 sentences:\n"
+            f"- Session: {session.name}\n"
+            f"- Capability: {session.capability.value}\n"
+            f"- Stage: {session.workflow.stage.value}\n"
+            f"- Target: {session.workflow.target or 'not set'}\n"
+            f"- Hosts: {len(session.hosts)}, Services: {len(session.services)}, "
+            f"Technologies: {len(session.technologies)}\n"
+            f"- Findings: {len(session.findings)}, Unknowns: {len(session.unknowns)}\n"
+            f"- Coverage: {gaps.coverage_score}/100\n"
+            f"- Gaps: {'; '.join(item.label for item in gaps.items[:3])}\n"
+            f"Keep it concise and actionable."
+        )
+        try:
+            return self.llm_provider.generate(prompt)
+        except Exception:
+            return None
 
     def summarize(self, session: Session) -> str:
+        llm_summary = self._llm_summarize(session)
         gaps = analyze_session_gaps(session)
-        lines = [
+        lines = []
+
+        if llm_summary:
+            lines.append(llm_summary)
+            lines.append("")
+
+        lines.extend([
             f"Session: {session.name}",
             f"Capability profile: {session.capability.value}",
             f"Workflow stage: {session.workflow.stage.value}",
@@ -24,7 +67,7 @@ class AnalystAssistant:
             f"Inventory: {len(session.hosts)} hosts | {len(session.services)} services | {len(session.technologies)} technologies",
             f"Signals: {len(session.findings)} findings | {len(session.unknowns)} unknowns | {len(session.evidence)} evidence items | {len(session.commands)} commands",
             gaps.summary(),
-        ]
+        ])
 
         ordered_recommendations = self._ordered_recommendations(session)
         if ordered_recommendations:
@@ -34,6 +77,9 @@ class AnalystAssistant:
         if highlights:
             lines.append("Highlights:")
             lines.extend(f"  - {highlight}" for highlight in highlights)
+
+        if self.llm_enabled and self.llm_provider is not None:
+            lines.append(f"LLM back-end: {self.llm_provider.name()}")
 
         return "\n".join(lines)
 
