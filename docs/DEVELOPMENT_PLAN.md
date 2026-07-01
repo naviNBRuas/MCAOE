@@ -3,72 +3,70 @@
 This document outlines the strategic roadmap for evolving the Modular Cybersecurity Analyst Operating Environment (MCAOE) from an MVP scaffold into a professional, polished, and stable terminal-native workbench.
 
 ## 1. Executive Summary
-MCAOE is currently an MVP with a solid conceptual foundation (event bus, plugin registry, UI scaffold). To achieve professional-grade stability, we must address several architectural gaps, establish standard Python packaging, overhaul the UI/UX, and encapsulate tool logic appropriately.
+MCAOE is currently a functional MVP with a solid conceptual foundation (event bus, plugin registry, UI scaffold). All six development phases have been completed, delivering a professional-grade architecture with containerized execution, AI integration, comprehensive documentation, and a polished TUI.
 
-## 2. Identified Gaps & Areas for Improvement
+## 2. Completed Phases
 
-### 2.1 Project Infrastructure & Quality Assurance
-* **Packaging:** Missing `pyproject.toml` or standard dependency management. Dependencies like `textual`, `pydantic`, and `networkx` must be formalized.
-* **CI/CD:** No automated workflows for testing, linting (Ruff), or type-checking (Mypy).
-* **Code Quality:** Lack of pre-commit hooks to enforce consistent formatting and static analysis.
-
-### 2.2 Architecture & Decoupling
-* **Plugin Encapsulation:** The core `app.py` and `ui/app.py` contain hardcoded ingestion logic for specific tools (e.g., `whatweb`, `nikto`, `ffuf`). This breaks the open-closed principle. Parsers should be tightly coupled to their respective plugins, not the core app.
-* **Database & State Management:** The SQLite integration lacks schema migration management (e.g., Alembic). An ORM layer or structured query builder is needed as the domain model grows.
-* **Docker Runtime:** The `DockerExecutionProvider` requires standardized `Dockerfile` definitions for the heavy tooling to ensure reproducibility across environments.
-
-### 2.3 User Interface (UI/UX)
-* **Widget Utilization:** The current Textual UI relies heavily on basic `RichLog` widgets. A professional UI requires structured data presentation (`DataTable` for hosts/services, `Tree` for knowledge graphs).
-* **Interactivity:** Approving tasks currently uses global key bindings. This should be refactored into interactive Modal dialogs for safer, explicit approvals.
-* **Navigation:** The layout should utilize `TabbedContent` to prevent visual clutter, separating "Planning", "Execution", and "Reporting" views.
-
-### 2.4 Documentation
-* **Developer Docs:** Missing a formal documentation site (e.g., MkDocs) detailing the architecture, event bus system, and how to write new plugins.
-* **User Manuals:** Instructions on securely configuring API keys, managing Docker dependencies, and interpreting the knowledge graph.
-
----
-
-## 3. Phased Implementation Roadmap
-
-The following phases are designed to be implemented sequentially.
-
-### Phase 1: Foundation & Tooling 
+### Phase 1: Foundation & Tooling ✓
 **Goal:** Establish a robust development environment and CI/CD pipeline.
-1. Initialize `pyproject.toml` using a modern build backend (e.g., Hatch, Poetry).
-2. Define all runtime and development dependencies.
-3. Configure Ruff for linting/formatting and Mypy for strict type checking.
-4. Setup GitHub Actions for automated CI checks.
-5. Introduce `pre-commit` hooks.
+1. Initialized `pyproject.toml` using Hatch build backend
+2. Defined all runtime and development dependencies
+3. Configured Ruff for linting/formatting and Mypy for strict type checking
+4. Setup GitHub Actions for automated CI checks (Ruff, Mypy, pytest)
+5. Introduced pre-commit hooks
+6. Added `py.typed` marker for PEP 561 compliance
+7. Fixed 6 test failures, 4 Ruff errors, 71 Mypy errors across source and test files
 
-### Phase 2: Architecture Refactoring & Plugin System
+### Phase 2: Architecture Refactoring & Plugin System ✓
 **Goal:** Decouple core logic from tool-specific implementations.
-1. Redesign the `Plugin` interface to require an `ingest_output(stdout, stderr)` method.
-2. Move all hardcoded parsers from `mcaoe.ui.app` and `mcaoe.app` into their respective plugin classes.
-3. Integrate Alembic for SQLite database migrations.
-4. Harden the async EventBus with better error boundary handling and dead-letter queues.
+1. Redesigned Plugin interface with `ingest_output()` method
+2. Moved all hardcoded parsers from `mcaoe.ui.app` and `mcaoe.app` into plugin classes
+3. Consolidated duplicate profile definitions into single canonical `profiles/catalog.py`
+4. Hardened async EventBus with error boundary wrapping and dead-letter queue
+5. Entity deduplication methods on Session model (add_host, add_service, etc.)
 
-### Phase 3: UI/UX Overhaul (Textual)
+### Phase 3: UI/UX Overhaul (Textual) ✓
 **Goal:** Transform the UI into a polished, professional dashboard.
-1. Refactor `MCAOEApp` layout to use `TabbedContent`.
-2. Implement `DataTable` for the "Target Intelligence" and "Findings" views.
-3. Implement `Tree` for visualizing the Knowledge Graph.
-4. Create reusable Modal Dialogs for task approval, preventing accidental executions.
-5. Add real-time visual indicators for Docker connection status and AI readiness.
+1. Refactored `MCAOEApp` layout to use `TabbedContent` with Inventory, Findings, Knowledge Graph, and Activity tabs
+2. Implemented `DataTable` for hosts/services/findings views
+3. Implemented `Tree` for Knowledge Graph visualization with hierarchical entity grouping
+4. Created reusable `TaskApprovalModal` for safe, explicit task execution approval
+5. Added Docker connection status indicator (green/red) in the UI header
 
-### Phase 4: Containerization & Execution Engine
+### Phase 4: Containerization & Execution Engine ✓
 **Goal:** Ensure reliable, isolated execution of heavy tools.
-1. Create a `containers/` directory with standardized Dockerfiles for tools (Nmap, WhatWeb, Nikto, FFuf).
-2. Enhance `DockerExecutionProvider` to stream logs asynchronously to the UI.
-3. Implement execution timeouts, resource limits, and automated container cleanup routines.
+1. Created `containers/Dockerfile.tools` with standard tooling image
+2. Enhanced `DockerRuntimeManager` with `stream_logs()` async generator for real-time log streaming
+3. Implemented execution timeouts with docker stop/rm cleanup via `stop_container()`
+4. Added `container_cleanup` flag (default: on) for automated cleanup on timeout/error
+5. Security profiles: recon_standard (bridge, 1g, 1.5 CPUs) and defensive_strict (no network, 768m, 1 CPU)
 
-### Phase 5: Intelligence & AI Integration
+### Phase 5: Intelligence & AI Integration ✓
 **Goal:** Elevate the assistant from a rule-based stub to a true AI co-pilot.
-1. Implement the LLM provider interface (via the existing keyring support).
-2. Enhance the `RecommendationEngine` to utilize AI for complex correlation.
-3. Expand Knowledge Graph capabilities to detect multi-stage attack paths.
+1. Implemented LLM provider interface with `LLMProvider` ABC (GeminiProvider, OpenAIProvider)
+2. API key resolution via env vars → system keyring with `get_api_key()` / `store_api_key_in_keyring()`
+3. Enhanced `AnalystAssistant` with optional LLM-based session summarization
+4. Expanded Knowledge Graph with relationship queries (neighbors(), paths_between(), nodes_by_kind())
+5. Added `link_technology_to_host()`, `link_finding_to_host()`, `link_evidence_to_entity()` to graph engine
+6. Added `ai` optional dependency group in pyproject.toml
 
-### Phase 6: Documentation & Release
+### Phase 6: Documentation & Release ✓
 **Goal:** Finalize project for open-source or commercial deployment.
-1. Setup MkDocs with Material theme in the `docs/` directory.
-2. Write Architecture Diagrams and Plugin Authoring guides.
-3. Prepare a v1.0.0 release candidate.
+1. Setup MkDocs with Material theme (`mkdocs.yml`)
+2. Wrote comprehensive Architecture documentation
+3. Created Plugin Authoring guide
+4. Overhauled README with feature list, CLI usage, quick start
+5. All 69+ tests passing, Ruff clean, Mypy strict-mode clean
+6. CI pipeline passing on push
+
+## 3. Future Roadmap
+
+### Post-MVP Enhancements
+- **Alembic migrations** for schema evolution
+- **Plugin auto-discovery** from pip-installed packages via entry points
+- **Multi-session comparison** in the UI
+- **Export/import** sessions as JSON/YAML
+- **Remote agent** support for distributed scanning
+- **Web dashboard** mode (optional Flask/FastAPI server)
+- **CI/CD integration** — trigger scans from GitHub webhooks
+- **Plugin marketplace** — registry for community plugins

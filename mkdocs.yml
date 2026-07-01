@@ -1,0 +1,27 @@
+site_name: MCAOE
+site_description: Modular Cybersecurity Analyst Operating Environment
+repo_url: https://github.com/naviNBRuas/mcaoe
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: indigo
+    accent: cyan
+  features:
+    - navigation.tabs
+    - navigation.top
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Architecture: ARCHITECTURE.md
+  - Plugin Guide: plugins.md
+  - Development Plan: DEVELOPMENT_PLAN.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - toc:
+      permalink: true

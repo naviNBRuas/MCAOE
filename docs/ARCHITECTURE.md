@@ -1,51 +1,91 @@
-# MCAOE Architecture Design Document
+# MCAOE Architecture
 
-## 1. System Overview
-MCAOE (Modular Cybersecurity Analyst Operating Environment) is a terminal-native, AI-assisted workbench. It acts as an orchestrator for heavy cybersecurity tools running in isolated Docker containers, providing a unified, local, and lightweight control plane for the analyst.
+## Overview
 
-## 2. Core Principles
-* **Analyst-Led (Human-in-the-Loop):** The system must never autonomously chain or launch offensive actions without explicit user approval.
-* **Isolation:** All external execution (scanners, enumeration tools) must occur in isolated, ephemeral Docker containers.
-* **Modularity:** Core application logic must remain completely agnostic to specific tool implementations. Tools are integrated solely via the Plugin Registry.
-* **Asynchronous Event-Driven:** State changes, tool outputs, and AI recommendations are propagated via an async Event Bus, allowing real-time UI updates without blocking.
+MCAOE is organized as a layered system with clear separation of concerns:
 
-## 3. High-Level Architecture Components
+```
+┌──────────────────────────────────────────────────┐
+│                    UI Layer                       │
+│  Textual TUI (TabbedContent, DataTable, Tree)    │
+│  Modal dialogs, Docker status indicator          │
+├──────────────────────────────────────────────────┤
+│               Application Layer                  │
+│  Orchestrator, Workflow Engine, CLI              │
+├──────────────────────────────────────────────────┤
+│              Domain / Model Layer                │
+│  Session, Host, Service, Finding, Technology     │
+│  Recommendation, Unknown, Evidence               │
+├─────────────┬────────────┬───────────────────────┤
+│  Plugins    │  Runtime   │   Intelligence        │
+│  (nmap,     │  (Docker,  │   (Knowledge Graph,   │
+│   nikto,    │   local)   │    Recommendations,   │
+│   ffuf...)  │            │    AI Assistant)      │
+├─────────────┴────────────┴───────────────────────┤
+│                   Infrastructure                  │
+│  Event Bus, SQLite Store, Logging, Observability │
+└──────────────────────────────────────────────────┘
+```
 
-### 3.1 Presentation Layer (Textual UI)
-The terminal user interface built with the `Textual` framework.
-* **Responsibilities:** Render dashboards, manage layout (`TabbedContent`, `DataTables`), capture user input, and display real-time event logs.
-* **Key Constraint:** Must not contain parsing or business logic. Strictly handles rendering and routing user intents to the Orchestrator.
+## Core Components
 
-### 3.2 Orchestration Layer
-The `AnalystOrchestrator` acts as the bridge between the UI, the Event Bus, and the Execution Environment.
-* **Responsibilities:** Validating task requests against the `SafetyPolicy`, resolving plugin configurations, and submitting tasks to the Execution Provider.
+### Event Bus (`core/events.py`)
+- Typed events with async dispatch
+- Error boundary wrapping for all handlers
+- Dead-letter queue for failed event processing
+- Event history for replay and observability
 
-### 3.3 Domain Model & State
-Pydantic-based data models representing the cybersecurity domain.
-* **Entities:** `Host`, `Service`, `Finding`, `Technology`, `Recommendation`, `WorkflowState`.
-* **Knowledge Graph:** A `networkx` based graph mapping relationships (e.g., `Host` -> `Service` -> `Vulnerability`).
-* **Persistence:** `SQLiteStore` (to be enhanced with Alembic/ORM) persists the session state to `.mcaoe/mcaoe.sqlite3`.
+### Plugin System (`plugins/`)
+- `Plugin` ABC with `execute()` and `ingest_output()` methods
+- `PluginRegistry` for registration and discovery
+- Built-in plugins for nmap, whatweb, nikto, ffuf, gobuster, etc.
+- Auto-discovery from plugin modules
 
-### 3.4 Execution Providers
-Abstractions for running external processes.
-* **LocalExecutionProvider:** Runs commands directly on the host (used primarily for testing or very safe native commands).
-* **DockerExecutionProvider:** The primary production provider. Manages container lifecycle via the `DockerRuntimeManager`, mounting necessary volumes and proxying stdout/stderr back to the Event Bus.
+### Runtime (`runtime/`)
+- `DockerRuntimeManager` — container execution with security profiles and log streaming
+- `DockerExecutionProvider` — adapter for the execution abstraction
+- Security profiles: `recon_standard` (bridge, 1g, 1.5 CPUs) and `defensive_strict` (no network, 768m, 1 CPU)
 
-### 3.5 Plugin Subsystem
-The extensibility mechanism of MCAOE.
-* **Structure:** Each tool (e.g., Nmap, Nikto) implements a `Plugin` interface.
-* **Responsibilities:** Defines the required Docker image, command-line arguments, and critically, the **parsing logic** to convert raw stdout/stderr into Domain Model entities (Findings, Services, Technologies).
+### Knowledge Graph (`graph/`)
+- NetworkX MultiDiGraph backing store
+- Entity nodes: hosts, services, technologies, findings, evidence, unknowns
+- Relationship edges: hosts, runs, affects, references
+- Traversal: neighbors(), paths_between(), nodes_by_kind()
 
-### 3.6 AI & Intelligence
-* **AnalystAssistant:** The interface to the LLM (Large Language Model) provider. Generates session summaries, workflow hints, and correlates disparate findings.
-* **RecommendationEngine:** A rule-based (and later AI-augmented) engine that observes the Event Bus and pushes actionable recommendations to the UI based on the current Workflow Stage and Discovered Entities.
+### AI Provider (`ai/`)
+- LLMProvider ABC with Gemini and OpenAI implementations
+- API key resolution via env vars → system keyring
+- Optional: requires `google-generativeai` or `openai` packages
+- Analyst assistant combines rule-based and AI summarization
 
-## 4. Event Flow (Task Execution Lifecycle)
-1. **User Request:** Analyst requests to run Nmap via the UI.
-2. **Planning:** Orchestrator retrieves the Nmap Plugin, generating a task execution plan.
-3. **Approval:** UI prompts the Analyst with the planned command. Analyst approves.
-4. **Execution:** Orchestrator validates the `SafetyPolicy`, then dispatches to the `DockerExecutionProvider`.
-5. **Streaming:** Provider executes the container, streaming raw output to the Event Bus.
-6. **Ingestion:** Upon completion, the Orchestrator hands the output back to the Nmap Plugin's parser.
-7. **State Mutation:** Parsed entities (e.g., `Host`, `Service`) are saved to the `SQLiteStore` and appended to the Knowledge Graph.
-8. **Reactivity:** UI widgets bound to the store/graph update automatically to reflect the new intelligence.
+### Recommendations (`recommendations/`)
+- Rule-based engine generating context-aware recommendations
+- Scored by priority (1=high) and confidence
+- Integrated with capability profiles and gap analysis
+
+### Session Management (`database/`)
+- SQLite-backed persistence with Session domain model
+- CLI commands for list, load, delete, count
+- Entity deduplication via add_host/add_service/add_finding methods
+
+## Data Model
+
+```
+Session
+ ├── targets: list[str]
+ ├── hosts: list[Host] (address, os)
+ ├── services: list[Service] (port, protocol, name, version)
+ ├── technologies: list[Technology] (name, version, confidence)
+ ├── findings: list[Finding] (title, severity, description)
+ ├── unknowns: list[Unknown] (label, priority)
+ ├── evidence: list[Evidence] (source, summary, raw)
+ ├── recommendations: list[Recommendation]
+ └── commands: list[ExecutedCommand]
+```
+
+## Container Profiles
+
+| Profile | Network | Memory | CPUs | No-New-Privs | Read-Only |
+|---------|---------|--------|------|-------------|-----------|
+| recon_standard | bridge | 1g | 1.5 | yes | no |
+| defensive_strict | none | 768m | 1.0 | yes | yes |

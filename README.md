@@ -1,37 +1,68 @@
-# MCAOE - Modular Cybersecurity Analyst Operating Environment
+# MCAOE — Modular Cybersecurity Analyst Operating Environment
 
-This repository contains MCAOE — a terminal-native, AI-assisted cybersecurity analyst workbench.
+A terminal-native, AI-assisted cybersecurity analyst workbench with containerized tool execution, structured domain models, and a plugin-based architecture.
 
-Secure setup highlights:
+## Features
 
-- Do not commit API keys. Use OS keyring (see `tools/ai_keyring_cli.py`) or CI secrets.
-- A `.env.template` helper is available via `mcaoe.ai.provider.ensure_env_template()`.
+- **Plugin System** — Tools (nmap, whatweb, nikto, ffuf) are encapsulated as plugins with structured output ingestion
+- **Event-Driven** — Async event bus with dead-letter queues and error boundaries
+- **Workflow Engine** — State machine driving discovery → fingerprinting → enumeration → validation
+- **Containerized Execution** — Tools run in isolated Docker containers with security profiles and timeouts
+- **Knowledge Graph** — Entity-relationship graph built on NetworkX with traversal queries
+- **Recommendation Engine** — Rule-based + optional AI-driven recommendations
+- **Interactive UI** — Textual-based TUI with TabbedContent, DataTable, Tree, and modal dialogs
+- **Session Management** — Persistent SQLite store with CLI list/load/delete
+- **AI Integration** — Optional LLM backends (Gemini, GPT) for session summarization
+- **Capability Profiles** — 9 pre-defined profiles (recon, fingerprinting, web, fuzzing, etc.)
 
-See `CONTRIBUTING.md`, `SECURITY.md`, and `SUPPORT.md` for contribution and support guidance.
+## Quick Start
 
-## MCAOE
+```bash
+pip install mcaoe
 
-Modular Cybersecurity Analyst Operating Environment.
+# Configure API key (optional, for AI features)
+export MCAOE_GEMINI_API_KEY="your-key"
 
-This repository currently contains an MVP scaffold for a terminal-native,
-human-in-the-loop cybersecurity analyst workbench. Heavy tooling is intended to
-run inside isolated containers, while the local application stays lightweight
-and modular.
+# Start interactive session
+mcaoe --interactive
 
-## What’s in the scaffold
+# Run a canned workflow
+mcaoe --target example.com --capability web_assessment
+```
 
-- Typed domain models for hosts, services, findings, recommendations, and sessions
-- An async event bus
-- A workflow state machine
-- An execution-provider abstraction
-- A Docker runtime manager stub
-- A rule-based recommendation engine
-- A networkx-based knowledge-graph engine
-- A plugin interface with an Nmap starter plugin
-- A minimal Textual app entrypoint
+## CLI Usage
 
-## Safety posture
+```
+mcaoe [--target HOST] [--capability PROFILE] [--interactive]
+      [--session-count] [--list-sessions] [--load-session ID]
+      [--delete-session ID] [--container-cleanup]
+```
 
-The project is designed for analyst-led workflows only. It should require
-explicit user approval for execution and should not autonomously chain or launch
-offensive actions.
+| Flag | Description |
+|------|-------------|
+| `--target` | Target host/IP/domain |
+| `--capability` | Capability profile (default: `recon`) |
+| `--interactive` | Open the Textual UI |
+| `--session-count` | Show number of stored sessions |
+| `--list-sessions` | List all stored sessions |
+| `--load-session` | Load a session by ID |
+| `--delete-session` | Delete a session by ID |
+| `--container-cleanup` | Auto-remove containers on exit |
+
+## Safety
+
+- Analyst-in-the-loop: all execution requires explicit approval via modal dialog
+- Tools run in isolated containers with resource limits and no-new-privileges
+- API keys stored via OS keyring, never committed
+- No autonomous chaining of offensive actions
+
+## Documentation
+
+See the `docs/` directory:
+- [Architecture](docs/ARCHITECTURE.md)
+- [Plugin Authoring](docs/plugins.md)
+- [Development Plan](docs/DEVELOPMENT_PLAN.md)
+
+## License
+
+MIT — see LICENSE file.
