@@ -55,6 +55,8 @@ class DeadLetter:
 def error_boundary(handler: EventHandler, on_error: ErrorHandler | None = None) -> EventHandler:
     """Wrap an event handler so that exceptions are logged and sent to an error handler."""
 
+    handler_name = getattr(handler, "__name__", str(handler))
+
     @functools.wraps(handler)
     async def safe_handler(event: Event) -> None:
         try:
@@ -62,11 +64,14 @@ def error_boundary(handler: EventHandler, on_error: ErrorHandler | None = None) 
             if asyncio.iscoroutine(result):
                 await result
         except Exception as exc:
-            name = getattr(handler, "__name__", str(handler))
-            logger.exception("Handler %s failed processing event %s", name, event.type)
+            logger.exception("Handler %s failed processing event %s", handler_name, event.type)
             if on_error is not None:
                 try:
-                    result = on_error(event, exc)
+                    on_error_with_name = getattr(on_error, "_with_name", None)
+                    if on_error_with_name is not None:
+                        result = on_error_with_name(event, exc, handler_name)
+                    else:
+                        result = on_error(event, exc)
                     if asyncio.iscoroutine(result):
                         await result
                 except Exception:
@@ -80,7 +85,6 @@ class EventBus:
         self._subscribers: dict[EventType, list[EventHandler]] = {event: [] for event in EventType}
         self._history: list[Event] = []
         self._dead_letter_queue: list[DeadLetter] = []
-        self._on_handler_error: ErrorHandler | None = self._default_error_handler
 
     @property
     def history(self) -> list[Event]:
@@ -90,26 +94,27 @@ class EventBus:
     def dead_letter_queue(self) -> list[DeadLetter]:
         return list(self._dead_letter_queue)
 
-    async def _default_error_handler(self, event: Event, exc: Exception) -> None:
-        self._dead_letter_queue.append(
-            DeadLetter(
-                event=event,
-                error=str(exc),
-                traceback=format_exc(),
-                handler_name="unknown",
+    def _make_on_error(self, handler_name: str) -> ErrorHandler:
+        async def _named_error(event: Event, exc: Exception) -> None:
+            self._dead_letter_queue.append(
+                DeadLetter(
+                    event=event,
+                    error=str(exc),
+                    traceback=format_exc(),
+                    handler_name=handler_name,
+                )
             )
-        )
-        logger.warning("Event %s moved to dead-letter queue: %s", event.type, exc)
-
-    def set_on_handler_error(self, handler: ErrorHandler) -> None:
-        self._on_handler_error = handler
+            logger.warning("Event %s moved to dead-letter queue: %s", event.type, exc)
+        return _named_error
 
     def subscribe(self, event_type: EventType, handler: EventHandler) -> None:
-        safe = error_boundary(handler, on_error=self._on_handler_error)
+        handler_name = getattr(handler, "__name__", str(handler))
+        safe = error_boundary(handler, on_error=self._make_on_error(handler_name))
         self._subscribers[event_type].append(safe)
 
     def subscribe_all(self, handler: EventHandler) -> None:
-        safe = error_boundary(handler, on_error=self._on_handler_error)
+        handler_name = getattr(handler, "__name__", str(handler))
+        safe = error_boundary(handler, on_error=self._make_on_error(handler_name))
         for event_type in EventType:
             self._subscribers[event_type].append(safe)
 

@@ -108,6 +108,9 @@ class KnowledgeGraphEngine:
             if source == node_id:
                 node_data = self.graph.nodes.get(target, {})
                 neighbors.append({"id": target, "relation": edge_attrs.get("relation", "connected"), **node_data})
+            elif target == node_id:
+                node_data = self.graph.nodes.get(source, {})
+                neighbors.append({"id": source, "relation": edge_attrs.get("relation", "connected"), **node_data})
         return neighbors
 
     def paths_between(self, source_id: str, target_id: str, max_depth: int = 5) -> list[list[str]]:
