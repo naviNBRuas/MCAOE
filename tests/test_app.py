@@ -80,3 +80,33 @@ def test_parser_supports_headless_mode() -> None:
     assert args.no_ui is True
     assert args.target == "example.com"
     assert args.plugin == "nmap"
+
+
+def test_parser_supports_export_session() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--export-session", "abc-123"])
+    assert args.export_session == "abc-123"
+
+
+def test_parser_supports_import_session() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--import-session", "session.json"])
+    assert args.import_session == "session.json"
+
+
+def test_parser_supports_config_flag() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--config", "/tmp/mcaoe.yml"])
+    assert args.config == "/tmp/mcaoe.yml"
+
+
+def test_parser_supports_completion_flag() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--completion", "bash"])
+    assert args.completion == "bash"
+
+    args = parser.parse_args(["--completion", "zsh"])
+    assert args.completion == "zsh"
+
+    args = parser.parse_args(["--completion", "fish"])
+    assert args.completion == "fish"

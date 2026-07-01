@@ -93,6 +93,82 @@ def test_runtime_run_uses_defensive_strict_profile_for_dfir_tasks() -> None:
     assert "--read-only" in str(captured.get("args", ""))
 
 
+def test_runtime_run_returns_container_name_in_metadata() -> None:
+    captured: dict[str, object] = {}
+
+    class _Process:
+        returncode = 0
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            return b"out", b""
+
+    async def fake_create_subprocess_exec(*args: object, **kwargs: object) -> _Process:
+        captured["args"] = args
+        return _Process()
+
+    with (
+        patch("mcaoe.runtime.docker.shutil.which", return_value="/usr/bin/docker"),
+        patch("mcaoe.runtime.docker.asyncio.create_subprocess_exec", new=fake_create_subprocess_exec),
+    ):
+        runtime = DockerRuntimeManager()
+        result = asyncio.run(runtime.run(ExecutionTask(command="echo", arguments=["hi"])))
+
+    assert "container" in result.metadata
+    assert result.metadata["container"].startswith("mcaoe-")
+
+
+def test_stream_logs_returns_graceful_error_when_docker_missing() -> None:
+    with patch("mcaoe.runtime.docker.shutil.which", return_value=None):
+        runtime = DockerRuntimeManager()
+        result = asyncio.run(runtime.stream_logs(ExecutionTask(command="echo", arguments=["hello"])))
+
+    assert result.exit_code == 127
+    assert "Docker executable" in result.stderr
+
+
+def test_stream_logs_invokes_docker_run() -> None:
+    captured: dict[str, object] = {}
+
+    class _StreamReader:
+        async def readline(self) -> bytes:
+            return b""
+
+    class _Process:
+        returncode = 0
+        stdout = _StreamReader()
+        stderr = _StreamReader()
+
+        async def wait(self) -> int:
+            return 0
+
+    async def fake_create_subprocess_exec(*args: object, **kwargs: object) -> _Process:
+        captured["args"] = args
+        return _Process()
+
+    with (
+        patch("mcaoe.runtime.docker.shutil.which", return_value="/usr/bin/docker"),
+        patch("mcaoe.runtime.docker.asyncio.create_subprocess_exec", new=fake_create_subprocess_exec),
+    ):
+        runtime = DockerRuntimeManager(container_name_prefix="mcaoe-stream")
+        result = asyncio.run(runtime.stream_logs(ExecutionTask(command="echo", arguments=["stream"])))
+
+    assert result.exit_code == 0
+    args = captured.get("args", ())
+    assert isinstance(args, tuple) and args[1:4] == ("run", "--rm", "--name")
+    assert "stream" in str(captured.get("args", ""))
+
+
+def test_runtime_stop_container_noop_when_docker_missing() -> None:
+    with patch("mcaoe.runtime.docker.shutil.which", return_value=None):
+        runtime = DockerRuntimeManager()
+        asyncio.run(runtime.stop_container("test-container"))
+
+
+def test_runtime_cleanup_flag_default_true() -> None:
+    runtime = DockerRuntimeManager()
+    assert runtime.container_cleanup is True
+
+
 def test_docker_execution_provider_delegates_to_runtime() -> None:
     from mcaoe.execution.provider import ExecutionResult
 
